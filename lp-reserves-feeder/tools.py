@@ -1,5 +1,5 @@
 
-from nodeRegistry import *
+from node_registry import *
 
 def deprefixAddress(address):
     return address.split(':')[1] if ':' in address else address

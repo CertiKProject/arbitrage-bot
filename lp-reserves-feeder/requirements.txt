@@ -2,3 +2,4 @@ python-dotenv
 web3_multicall
 snowflake-connector-python
 confluent-kafka
+colorlog
