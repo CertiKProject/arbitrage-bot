@@ -6,58 +6,19 @@ import time
 import json
 import math
 import dataclasses
-from dataclasses import dataclass
-
-from confluent_kafka import Consumer
-import ccloud_lib
-import logging
-from log import set_log_format
+from cryptography.fernet import Fernet
 
 from arbi2 import ArbiLP, arbiLPsToCycles
-
-set_log_format()
-log = logging.getLogger("consume-latest-lp-reserves")
-
-
+from my_consumer import *
+from my_producer import *
+from arbi_types import *
 
 
-class MyConsumer(object):
-    consumer: Consumer
-    topic: str
-
-    def __init__(self, configFile: str, topic: str):
-        try:
-            self.topic = topic
-            conf = ccloud_lib.read_ccloud_config(configFile)
-            producer_conf = ccloud_lib.pop_schema_registry_params_from_config(conf)
-            self.consumer = Consumer(producer_conf)
-            self.consumer.subscribe([topic])
-        except Exception as e:
-            log.error(f"init confluent error: {e}")
-            exit(1)
-
-    def consume(self):
-        self.consumer.subscribe([self.topic])
-        msg = self.consumer.poll(timeout=4.0)
-
-        # if msg.error():
-        #     if msg.error().code() == KafkaError._PARTITION_EOF:
-        #         # End of partition event
-        #         sys.stderr.write('%% %s [%d] reached end at offset %d\n' %
-        #                          (msg.topic(), msg.partition(), msg.offset()))
-        #     elif msg.error():
-        #         raise KafkaException(msg.error())
-
-        return msg
-
-    @staticmethod
-    def delivery_report(err, msg):
-        """ Called once for each message produced to indicate delivery result.
-            Triggered by poll() or flush(). """
-        if err is not None:
-            log.info('Message delivery failed: {}'.format(err))
-        else:
-            log.info('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
+class EnhancedJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        return super().default(o)
 
 
 def lprsToArbiLP(lprs) -> ArbiLP:
@@ -74,20 +35,39 @@ def lprsToArbiLP(lprs) -> ArbiLP:
                   token1Address=lprs['token1Address'],
                   token2Address=lprs['token2Address'])
 
-
 def lprsToArbiLPs(lprsList) -> [ArbiLP]:
     return list(map(lambda lprs: lprsToArbiLP(lprs), lprsList))
+
+
+def alpToOutputLP(lp: ArbiLP) -> OutputLP:
+    return OutputLP(token1=lp.token1,
+                    token2=lp.token2,
+                    lpAddress=lp.lpAddress,
+                    token1Address=lp.token1Address,
+                    token2Address=lp.token2Address)
+
+def aosToOutputAos (aos: [ArbiOpportunity]) -> [OutputAO]:
+    return list(map(lambda ao: OutputAO(tokenAddresses=ao.tokenAddresses,
+                                        tokens=ao.tokens,
+                                        lps=list(map(alpToOutputLP, ao.lps)),
+                                        profit=ao.totalGain - 1),
+                    aos))
+
 
 
 
 def testConsume():
 
     configFile = ".ccloud"
-    # topic = "test-topic"
+    configFileProduce = ".ccloud_produce"
     topic = "latest-lp-reserves-2"
+    output_topic = "test-ao"
 
     myConsumer = MyConsumer(configFile=configFile, topic=topic)
+    myProducer = MyProducer(configFile=configFileProduce, topic=output_topic)
+    cs = Fernet(os.environ.get('encryption_key'))
 
+    # return
     while True:
         r = myConsumer.consume()
         # print(None if r is None else r.value())
@@ -101,15 +81,21 @@ def testConsume():
             print('latest timestamp to now = ', time.time() - latestTimestamp)
 
             arbiLPs = lprsToArbiLPs(rval)
-            arbios = arbiLPsToCycles(arbiLPs)
+            arbios: [ArbiOpportunity] = arbiLPsToCycles(arbiLPs)
+            oaos = aosToOutputAos(arbios)
 
-            with open('lprs.json', 'w') as f:
-                f.write(r.value().decode('utf-8'))
+            # print(oaos)
+
+            text = cs.encrypt(str.encode(json.dumps(arbios, cls=EnhancedJSONEncoder)))
+            myProducer.push('test', text)
+
+            # with open('lprs.json', 'w') as f:
+            #     f.write(r.value().decode('utf-8'))
             # break
 
 
-
 if __name__ == "__main__":
+    load_dotenv()
     testConsume()
 
     # with open('lprs.json', 'r') as f:

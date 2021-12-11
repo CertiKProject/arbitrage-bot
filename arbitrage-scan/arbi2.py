@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
 
-# install snowflake-connector-python, python-dotenv
-# create a file .env
-# SNOW_USER=...
-# SNOW_PASSWORD=...
-# SNOW_ACCOUNT=wra72362.us-east-1
-
-import os
 from dotenv import load_dotenv
 import time
 import json
 import math
-import dataclasses
-from dataclasses import dataclass
 from typing import Dict
+from arbi_types import *
 
 # we do not consider arbitrage with more than this many steps
 MAX_ARBI_LENGTH = 10
@@ -21,47 +13,7 @@ MAX_ARBI_LENGTH = 10
 # we do not consider arbitrage with less than this much profit
 ARBI_GAIN_THRESHOLD = 0.01
 
-
-@dataclass
-class ArbiLP:
-    token1: str
-    token2: str
-    reserve1: float
-    reserve2: float
-    ratio: float
-    logratio: float
-    neglogratio: float
-    lpAddress: str
-    token1Address: str
-    token2Address: str
-
-
-@dataclass
-class BFBacktracker:
-    fromI: int
-    lp: ArbiLP
-    neglogratio: float
-
-
-@dataclass
-class ArbiOpportunity:
-    tokenAddresses: [str]
-    tokens: [str]
-    lps: [ArbiLP]
-    totalLogRatio: float
-    totalGain: float
-
-
-@dataclass
-class ArbiStep:
-    tokenAddresses: str
-    tokenSymbol: str
-    lpAddress: str
-    simAmount: float
-
-
-
-
+# starting point
 WBNB_ADDRESS = 'bsc:0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'.lower()
 
 
@@ -184,7 +136,7 @@ def searchForArbi(records: Dict[int, Dict[int, BFBacktracker]],
     indices_stack.pop()
 
 
-def bf(token_map: Dict[str, str], lps: [ArbiLP]):
+def bf(token_map: Dict[str, str], lps: [ArbiLP]) -> [ArbiOpportunity]:
     n = len(token_map)
     token_addresses = list(token_map.keys())
 
@@ -274,11 +226,11 @@ def bf(token_map: Dict[str, str], lps: [ArbiLP]):
     arbios.sort(key=lambda arbio: -arbio.totalGain)
 
     print(f"================== Arbitrage Opportunities (ts = {time.time():.2f}) ====================")
-    print("Arbitrage Tokens        Profit      LPs ")
+    print("Arbitrage Tokens          Profit      LPs ")
     for arbio in arbios:
         # print (arbio.tokens, arbio.totalGain)
         l = list(map(lambda lp:lp.lpAddress[:12]+'...', arbio.lps))
-        print (f"{','.join(arbio.tokens):20}   {(arbio.totalGain - 1) * 100:6.2f}%      {','.join(l)}")
+        print (f"{','.join(arbio.tokens):22}   {(arbio.totalGain - 1) * 100:6.2f}%      {','.join(l)}")
 
     return arbios
 
@@ -289,8 +241,9 @@ def arbiLPsToCycles(arbiLPs: [ArbiLP]):
         tokenMap[lp.token1Address] = lp.token1
         tokenMap[lp.token2Address] = lp.token2
 
-    return list(map(lambda arbio: simulateArbi(arbio), bf(tokenMap, arbiLPs)))
+    return bf(tokenMap, arbiLPs)
 
+    # return list(map(lambda arbio: simulateArbi(arbio), bf(tokenMap, arbiLPs)))
 
 
 if __name__ == "__main__":

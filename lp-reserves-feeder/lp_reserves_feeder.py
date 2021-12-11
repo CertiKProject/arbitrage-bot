@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 
-# pip3 install web3
 import json
 from dotenv import load_dotenv
-import time
 import dataclasses
 from dataclasses import dataclass
 
 from my_producer import MyProducer
-from get_lps import *
 from fetch_reserves import *
 
 
