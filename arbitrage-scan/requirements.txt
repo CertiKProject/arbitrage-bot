@@ -1,2 +1,2 @@
-colorlog
-confluent-kafka==1.7.0
+python-dotenv
+confluent-kafka

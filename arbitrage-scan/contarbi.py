@@ -4,7 +4,6 @@ import os
 from dotenv import load_dotenv
 import time
 import json
-import snowflake.connector
 import math
 import dataclasses
 from dataclasses import dataclass
